@@ -5,3 +5,8 @@ static
 templates
 build
 pages
+
+Dockerfile
+.dockerignore
+.git
+.gitignore
