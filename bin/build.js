@@ -2,7 +2,6 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import * as R from 'ramda';
 import { marked } from 'marked';
 import mustache from 'mustache';
 import moment from 'moment';
@@ -58,73 +57,50 @@ const toJournalPage = (config, date, older, newer) => (content) => {
   });
 };
 
-const toPage = (config) => (content) => {
-  const page = fs
-    .readFileSync(path.join(config.templatesPath, 'page.html'))
-    .toString();
-  return mustache.render(page, {
-    body: content,
-  });
+const buildOutput = (config, date, older, newer, filename) => {
+  const inputFilename = createInputFilename(config, date);
+  console.log(
+    `Processing ${inputFilename} -> ${
+      filename || createOutputFilename(config, date)
+    }...`
+  );
+  const content = fs.readFileSync(inputFilename).toString();
+  const rendered = renderMarkdown(content);
+  const journalPage = toJournalPage(config, date, older, newer)(rendered);
+  mkdirp(createOutputPath(config, date));
+  fs.writeFileSync(filename || createOutputFilename(config, date), journalPage);
 };
-
-const buildOutput = (config, date, older, newer, filename) =>
-  R.compose(
-    (content) => {
-      mkdirp(createOutputPath(config, date));
-      fs.writeFileSync(filename || createOutputFilename(config, date), content);
-    },
-    toJournalPage(config, date, older, newer),
-    (o) => {
-      console.log(o);
-      return o;
-    },
-    renderMarkdown,
-    (b) => b.toString(),
-    fs.readFileSync,
-    (inputFilename) => {
-      console.log(
-        `Processing ${inputFilename} -> ${
-          filename || createOutputFilename(config, date)
-        }...`
-      );
-      return inputFilename;
-    },
-    (date) => createInputFilename(config, date)
-  )(date);
 
 const dateDescending = (a, b) => b.valueOf() - a.valueOf();
 
 const getDates = (config) =>
-  R.reduce(
+  allFilesInPath(config.journalPath).reduce(
     (dates, year) => [
       ...dates,
-      ...R.reduce(
+      ...allFilesInPath(path.join(config.journalPath, year)).reduce(
         (dates, month) => [
           ...dates,
-          ...R.reduce(
+          ...allFilesInPath(path.join(config.journalPath, year, month)).reduce(
             (dates, filename) => [
               ...dates,
               moment(path.basename(filename, '.md')),
             ],
-            [],
-            allFilesInPath(path.join(config.journalPath, year, month))
+            []
           ),
         ],
-        [],
-        allFilesInPath(path.join(config.journalPath, year))
+        []
       ),
     ],
-    [],
-    allFilesInPath(config.journalPath)
+    []
   );
 
-const getSortedDates = (config) => R.sort(dateDescending, getDates(config));
+const getSortedDates = (config) => getDates(config).sort(dateDescending);
 
 const buildMetadata = (dates) => {
   const metadata = [];
-  for (let i = 0; i < R.length(dates); i++) {
+  for (let i = 0; i < dates.length; i++) {
     if (i === 0) {
-      if (i === R.length(dates) - 1) {
+      if (i === dates.length - 1) {
         metadata.push({
           today: dates[i],
           older: dates[i],
@@ -138,7 +114,7 @@ const buildMetadata = (dates) => {
         });
       }
     } else {
-      if (i === R.length(dates) - 1) {
+      if (i === dates.length - 1) {
         metadata.push({
           today: dates[i],
           older: dates[i], // there is no tomorrow
@@ -189,7 +165,7 @@ const renderTemplate = (config, layout, view = {}) => {
 };
 
 const buildPages = (config) => {
-  R.forEach((filename) => {
+  allFilesInPath(config.pagesPath).forEach((filename) => {
     console.log(`${config.pagesPath}/${filename}`);
     if (path.extname(filename) === '.html') {
       const { frontMatter, contents } = loadSourceFile(
@@ -228,27 +204,20 @@ const buildPages = (config) => {
     } else {
       console.error(`Unhandled file type ${filename}`);
     }
-  }, allFilesInPath(config.pagesPath));
+  });
 };
 
-const main = async () => {
-  const pithRoot = process.env.PITH_ROOT || '.';
-  const config = {
-    journalPath: path.join(pithRoot, 'journal'),
-    templatesPath: path.join(pithRoot, 'templates'),
-    staticPath: path.join(pithRoot, 'static'),
-    pagesPath: path.join(pithRoot, 'pages'),
-    buildPath: path.join(pithRoot, 'build'),
-  };
-
+const resetBuildFolder = (config) => {
   cleanBuild(config);
   mkdirp(config.buildPath);
+};
+
+const buildJournal = (config) => {
   const dates = getSortedDates(config);
   const metadata = buildMetadata(dates);
-  R.forEach(
-    ({ today, older, newer }) => buildOutput(config, today, older, newer),
-    metadata
-  );
+  for (const { today, older, newer } of metadata) {
+    buildOutput(config, today, older, newer);
+  }
   if (metadata.length > 0) {
     buildOutput(
       config,
@@ -258,6 +227,20 @@ const main = async () => {
       path.join(config.buildPath, 'index.html')
     );
   }
+};
+
+const main = () => {
+  const pithRoot = process.env.PITH_ROOT || '.';
+  const config = {
+    journalPath: path.join(pithRoot, 'journal'),
+    templatesPath: path.join(pithRoot, 'templates'),
+    staticPath: path.join(pithRoot, 'static'),
+    pagesPath: path.join(pithRoot, 'pages'),
+    buildPath: path.join(pithRoot, 'build'),
+  };
+
+  resetBuildFolder(config);
+  buildJournal(config);
 
   if (fs.existsSync(config.pagesPath)) {
     buildPages(config);
@@ -265,13 +248,9 @@ const main = async () => {
   copyStatic(config);
 };
 
-main()
-  .then(() => {
-    console.log('Done');
-    process.exit(0);
-  })
-  .catch((e) => {
-    console.error(`Error: ${e.message}`);
-    console.error(e);
-    process.exit(1);
-  });
+try {
+  main();
+} catch (e) {
+  console.error(e);
+  process.exit(1);
+}
