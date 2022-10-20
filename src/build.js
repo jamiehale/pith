@@ -1,5 +1,6 @@
 #! /usr/bin/env babel-node
 
+import process from 'node:process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { buildJournal } from './journal';
