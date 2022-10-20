@@ -16,7 +16,7 @@ const journalHref = (d) => `/${format(d, 'yyyy')}/${format(d, 'MM')}/${format(d,
 
 const buildOutput = (config, date, older, newer, filename) => {
   const inputFilename = createInputFilename(config, date);
-  console.log(`Processing ${inputFilename} -> ${filename || createOutputFilename(config, date)}...`);
+  console.log(`${inputFilename} -> ${filename || createOutputFilename(config, date)}...`);
   const content = fs.readFileSync(inputFilename).toString();
   const rendered = renderMarkdown(content);
   const journalPage = renderTemplate(config, 'journal-page', {
