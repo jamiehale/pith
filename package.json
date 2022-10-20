@@ -8,8 +8,8 @@
     "@babel/core": "^7.14.0",
     "@babel/node": "^7.15.4",
     "@babel/preset-env": "^7.14.1",
+    "date-fns": "^2.29.3",
     "marked": "4.0.16",
-    "moment": "^2.29.3",
     "mustache": "^4.2.0",
     "yaml": "^2.1.3"
   },
@@ -19,6 +19,7 @@
     "docker:lint": "docker run --rm -i hadolint/hadolint < Dockerfile"
   },
   "prettier": {
+    "printWidth": 160,
     "singleQuote": true
   }
 }

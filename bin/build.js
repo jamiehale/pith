@@ -4,7 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { marked } from 'marked';
 import mustache from 'mustache';
-import moment from 'moment';
+import parseISO from 'date-fns/parseISO';
+import format from 'date-fns/format';
 import { parseAllDocuments } from 'yaml';
 
 const frontMatterPattern = /^---.*---\s*/s;
@@ -26,44 +27,33 @@ const loadSourceFile = (filePath) => {
 
 const renderMarkdown = (s) => marked.parse(s);
 
-const createOutputPath = (config, d) =>
-  `${config.buildPath}/${d.format('YYYY')}/${d.format('MM')}`;
-const createOutputFilename = (config, d) =>
-  `${createOutputPath(config, d)}/${d.format('YYYY-MM-DD')}.html`;
+const createOutputPath = (config, d) => `${config.buildPath}/${format(d, 'yyyy')}/${format(d, 'MM')}`;
 
-const createInputFilename = (config, d) =>
-  `${config.journalPath}/${d.format('YYYY')}/${d.format('MM')}/${d.format(
-    'YYYY-MM-DD'
-  )}.md`;
+const createOutputFilename = (config, d) => `${createOutputPath(config, d)}/${format(d, 'yyyy-MM-dd')}.html`;
+
+const createInputFilename = (config, d) => `${config.journalPath}/${format(d, 'yyyy')}/${format(d, 'MM')}/${format(d, 'yyyy-MM-dd')}.md`;
 
 const mkdirp = (path) => {
   fs.mkdirSync(path, { recursive: true });
 };
 
-const dateToHref = (d) =>
-  `/${d.format('YYYY')}/${d.format('MM')}/${d.format('YYYY-MM-DD')}.html`;
+const journalHref = (d) => `/${format(d, 'yyyy')}/${format(d, 'MM')}/${format(d, 'yyyy-MM-dd')}.html`;
 
 const toJournalPage = (config, date, older, newer) => (content) => {
-  const page = fs
-    .readFileSync(path.join(config.templatesPath, 'journal-page.html'))
-    .toString();
+  const page = fs.readFileSync(path.join(config.templatesPath, 'journal-page.html')).toString();
   return mustache.render(page, {
-    title: date.format('dddd, MMMM Do YYYY').toLowerCase(),
+    title: format(date, 'EEEE, MMMM do yyyy').toLowerCase(),
     body: content,
-    older: older.format('YYYY-DD-MM'),
-    olderHref: dateToHref(older),
-    newer: newer.format('YYYY-MM-DD'),
-    newerHref: dateToHref(newer),
+    older: format(older, 'yyyy-MM-dd'),
+    olderHref: journalHref(older),
+    newer: format(newer, 'yyyy-MM-dd'),
+    newerHref: journalHref(newer),
   });
 };
 
 const buildOutput = (config, date, older, newer, filename) => {
   const inputFilename = createInputFilename(config, date);
-  console.log(
-    `Processing ${inputFilename} -> ${
-      filename || createOutputFilename(config, date)
-    }...`
-  );
+  console.log(`Processing ${inputFilename} -> ${filename || createOutputFilename(config, date)}...`);
   const content = fs.readFileSync(inputFilename).toString();
   const rendered = renderMarkdown(content);
   const journalPage = toJournalPage(config, date, older, newer)(rendered);
@@ -80,13 +70,7 @@ const getDates = (config) =>
       ...allFilesInPath(path.join(config.journalPath, year)).reduce(
         (dates, month) => [
           ...dates,
-          ...allFilesInPath(path.join(config.journalPath, year, month)).reduce(
-            (dates, filename) => [
-              ...dates,
-              moment(path.basename(filename, '.md')),
-            ],
-            []
-          ),
+          ...allFilesInPath(path.join(config.journalPath, year, month)).reduce((dates, filename) => [...dates, parseISO(path.basename(filename, '.md'))], []),
         ],
         []
       ),
@@ -146,9 +130,7 @@ const copyStatic = (config) => {
 const allFilesInPath = (path) => fs.readdirSync(path);
 
 const renderTemplate = (config, layout, view = {}) => {
-  const { frontMatter, contents } = loadSourceFile(
-    path.join(config.templatesPath, `${layout}.html`)
-  );
+  const { frontMatter, contents } = loadSourceFile(path.join(config.templatesPath, `${layout}.html`));
 
   const renderedContent = mustache.render(contents, {
     ...view,
@@ -168,9 +150,7 @@ const buildPages = (config) => {
   allFilesInPath(config.pagesPath).forEach((filename) => {
     console.log(`${config.pagesPath}/${filename}`);
     if (path.extname(filename) === '.html') {
-      const { frontMatter, contents } = loadSourceFile(
-        path.join(config.pagesPath, filename)
-      );
+      const { frontMatter, contents } = loadSourceFile(path.join(config.pagesPath, filename));
 
       let rendered = mustache.render(contents, frontMatter);
       if (frontMatter.layout) {
@@ -184,9 +164,7 @@ const buildPages = (config) => {
       mkdirp(path.dirname(outputFilePath));
       fs.writeFileSync(outputFilePath, rendered);
     } else if (path.extname(filename) === '.md') {
-      const { frontMatter, contents } = loadSourceFile(
-        path.join(config.pagesPath, filename)
-      );
+      const { frontMatter, contents } = loadSourceFile(path.join(config.pagesPath, filename));
 
       const renderedMarkdown = renderMarkdown(contents);
       let rendered = mustache.render(renderedMarkdown, frontMatter);
@@ -219,13 +197,7 @@ const buildJournal = (config) => {
     buildOutput(config, today, older, newer);
   }
   if (metadata.length > 0) {
-    buildOutput(
-      config,
-      metadata[0].today,
-      metadata[0].older,
-      metadata[0].newer,
-      path.join(config.buildPath, 'index.html')
-    );
+    buildOutput(config, metadata[0].today, metadata[0].older, metadata[0].newer, path.join(config.buildPath, 'index.html'));
   }
 };
 
