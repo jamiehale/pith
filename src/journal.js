@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import parseISO from 'date-fns/parseISO';
 import format from 'date-fns/format';
-import { allFilesInPath, mkdirp } from './util';
+import mustache from 'mustache';
+import { allFilesInPath, loadSourceFile, mkdirp } from './util';
 import { renderMarkdown } from './markdown';
 import { renderTemplate } from './templates';
 import { buildRss } from './rss';
@@ -15,21 +16,29 @@ const createInputFilename = (config, d) => `${config.journalPath}/${format(d, 'y
 
 const journalHref = (d) => `/${format(d, 'yyyy')}/${format(d, 'MM')}/${format(d, 'yyyy-MM-dd')}.html`;
 
-const buildOutput = (config, date, older, newer, filename) => {
-  const inputFilename = createInputFilename(config, date);
-  console.log(`${inputFilename} -> ${filename || createOutputFilename(config, date)}...`);
-  const content = fs.readFileSync(inputFilename).toString();
-  const rendered = renderMarkdown(content);
-  const journalPage = renderTemplate(config, 'journal-page', {
-    title: format(date, 'EEEE, MMMM do yyyy').toLowerCase(),
-    body: rendered,
-    older: format(older, 'yyyy-MM-dd'),
-    olderHref: journalHref(older),
-    newer: format(newer, 'yyyy-MM-dd'),
-    newerHref: journalHref(newer),
-  });
-  mkdirp(createOutputPath(config, date));
-  fs.writeFileSync(filename || createOutputFilename(config, date), journalPage);
+const buildOutput = (config, metadata, filename) => {
+  const inputFilePath = createInputFilename(config, metadata.today);
+  const outputFilePath = filename || createOutputFilename(config, metadata.today);
+  console.log(`${inputFilePath} -> ${outputFilePath}...`);
+
+  const { frontMatter, contents } = loadSourceFile(inputFilePath);
+
+  const renderedMarkdown = renderMarkdown(contents);
+  let rendered = mustache.render(renderedMarkdown, frontMatter);
+  if (frontMatter.layout) {
+    rendered = renderTemplate(config, frontMatter.layout, {
+      ...frontMatter,
+      content: rendered,
+      title: frontMatter.title || format(metadata.today, 'EEEE, MMMM do yyyy').toLowerCase(),
+      older: format(metadata.older, 'yyyy-MM-dd'),
+      olderHref: journalHref(metadata.older),
+      newer: format(metadata.newer, 'yyyy-MM-dd'),
+      newerHref: journalHref(metadata.newer),
+    });
+  }
+
+  mkdirp(path.dirname(outputFilePath));
+  fs.writeFileSync(outputFilePath, rendered);
 };
 
 const dateDescending = (a, b) => b.valueOf() - a.valueOf();
@@ -94,11 +103,11 @@ const buildMetadata = (config, dates) => {
 export const buildJournal = (config) => {
   const dates = getSortedDates(config);
   const metadata = buildMetadata(config, dates);
-  for (const { today, older, newer } of metadata) {
-    buildOutput(config, today, older, newer);
+  for (const record of metadata) {
+    buildOutput(config, record);
   }
   if (metadata.length > 0) {
-    buildOutput(config, metadata[0].today, metadata[0].older, metadata[0].newer, path.join(config.buildPath, 'index.html'));
+    buildOutput(config, metadata[0], path.join(config.buildPath, 'index.html'));
   }
   buildRss(config, metadata);
 };
