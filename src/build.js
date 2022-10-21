@@ -40,6 +40,9 @@ const config = {
   staticPath: path.join(pithRoot, 'static'),
   pagesPath: path.join(pithRoot, 'pages'),
   buildPath: path.join(pithRoot, 'build'),
+  baseUrl: process.env.PITH_BASE_URL,
+  siteTitle: process.env.PITH_SITE_TITLE,
+  siteDescription: process.env.PITH_SITE_DESCRIPTION,
 };
 
 try {

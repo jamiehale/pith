@@ -5,6 +5,7 @@ import format from 'date-fns/format';
 import { allFilesInPath, mkdirp } from './util';
 import { renderMarkdown } from './markdown';
 import { renderTemplate } from './templates';
+import { buildRss } from './rss';
 
 const createOutputPath = (config, d) => `${config.buildPath}/${format(d, 'yyyy')}/${format(d, 'MM')}`;
 
@@ -50,7 +51,7 @@ const getDates = (config) =>
 
 const getSortedDates = (config) => getDates(config).sort(dateDescending);
 
-const buildMetadata = (dates) => {
+const buildMetadata = (config, dates) => {
   const metadata = [];
   for (let i = 0; i < dates.length; i++) {
     if (i === 0) {
@@ -59,12 +60,14 @@ const buildMetadata = (dates) => {
           today: dates[i],
           older: dates[i],
           newer: dates[i],
+          link: `${config.baseUrl}${journalHref(dates[i])}`,
         });
       } else {
         metadata.push({
           today: dates[i],
           older: dates[i + 1],
           newer: dates[i], // there is no yesterday
+          link: `${config.baseUrl}${journalHref(dates[i])}`,
         });
       }
     } else {
@@ -73,12 +76,14 @@ const buildMetadata = (dates) => {
           today: dates[i],
           older: dates[i], // there is no tomorrow
           newer: dates[i - 1],
+          link: `${config.baseUrl}${journalHref(dates[i])}`,
         });
       } else {
         metadata.push({
           today: dates[i],
           older: dates[i + 1],
           newer: dates[i - 1],
+          link: `${config.baseUrl}${journalHref(dates[i])}`,
         });
       }
     }
@@ -88,11 +93,12 @@ const buildMetadata = (dates) => {
 
 export const buildJournal = (config) => {
   const dates = getSortedDates(config);
-  const metadata = buildMetadata(dates);
+  const metadata = buildMetadata(config, dates);
   for (const { today, older, newer } of metadata) {
     buildOutput(config, today, older, newer);
   }
   if (metadata.length > 0) {
     buildOutput(config, metadata[0].today, metadata[0].older, metadata[0].newer, path.join(config.buildPath, 'index.html'));
   }
+  buildRss(config, metadata);
 };
