@@ -1,6 +1,6 @@
 # Pith
 
-Pith is a very simple and opinionated static website generator. It is in the very early stages. Expect frequent changes.
+Pith is a very simple and super opinionated static website generator. It is in the very early stages. Expect frequent changes.
 
 Folders must look like this:
 

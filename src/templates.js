@@ -12,6 +12,8 @@ export function renderTemplate(config, layout, view = {}) {
 
   if (frontMatter.layout) {
     return renderTemplate(config, frontMatter.layout, {
+      ...view,
+      ...frontMatter,
       content: renderedContent,
     });
   }
