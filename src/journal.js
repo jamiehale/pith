@@ -25,6 +25,10 @@ const buildOutput = (config, metadata, filename) => {
 
   const renderedMarkdown = renderMarkdown(contents);
   let rendered = mustache.render(renderedMarkdown, frontMatter);
+  const summary = rendered
+    .replace(/(<([^>]+)>)/gi, '')
+    .substring(0, config.rssSummaryLength)
+    .concat('...');
   if (frontMatter.layout) {
     rendered = renderTemplate(config, frontMatter.layout, {
       ...frontMatter,
@@ -39,6 +43,12 @@ const buildOutput = (config, metadata, filename) => {
 
   mkdirp(path.dirname(outputFilePath));
   fs.writeFileSync(outputFilePath, rendered);
+
+  return {
+    ...metadata,
+    title: frontMatter.title || format(metadata.today, 'EEEE, MMMM do yyyy').toLowerCase(),
+    summary: frontMatter.summary || summary,
+  };
 };
 
 const dateDescending = (a, b) => b.valueOf() - a.valueOf();
@@ -102,10 +112,8 @@ const buildMetadata = (config, dates) => {
 
 export const buildJournal = (config) => {
   const dates = getSortedDates(config);
-  const metadata = buildMetadata(config, dates);
-  for (const record of metadata) {
-    buildOutput(config, record);
-  }
+  let metadata = buildMetadata(config, dates);
+  metadata = metadata.map((record) => buildOutput(config, record));
   if (metadata.length > 0) {
     buildOutput(config, metadata[0], path.join(config.buildPath, 'index.html'));
   }

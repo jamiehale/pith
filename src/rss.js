@@ -1,16 +1,15 @@
-import format from 'date-fns/format';
 import fs from 'node:fs';
 import path from 'node:path';
 
 const buildItem = (metadata) => `<item>
-  <title>${format(metadata.today, 'EEEE, MMMM do yyyy')}</title>
+  <title>${metadata.title}</title>
   <link>${metadata.link}</link>
-  <description></description>
+  <description>${metadata.summary}</description>
 </item>
 `;
 
 const buildRoot = (config, metadata) => {
-  const items = metadata.slice(0, 5).map(buildItem).join('\n');
+  const items = metadata.slice(0, config.rssItemCount).map(buildItem).join('\n');
 
   return `<?xml version="1.0" encoding="UTF-8" ?>
 <rss version="2.0">

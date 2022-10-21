@@ -43,6 +43,8 @@ const config = {
   baseUrl: process.env.PITH_BASE_URL,
   siteTitle: process.env.PITH_SITE_TITLE,
   siteDescription: process.env.PITH_SITE_DESCRIPTION,
+  rssItemCount: process.env.PITH_RSS_ITEM_COUNT || 5,
+  rssSummaryLength: process.env.PITH_RSS_SUMMARY_LENGTH || 100,
 };
 
 try {
