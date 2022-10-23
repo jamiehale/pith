@@ -1,14 +1,16 @@
-import fs from 'node:fs';
-import path from 'node:path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { Config } from './config';
+import { Metadata } from './metadata';
 
-const buildItem = (metadata) => `<item>
+const buildItem = (metadata: Metadata) => `<item>
   <title>${metadata.title}</title>
   <link>${metadata.link}</link>
   <description>${metadata.summary}</description>
 </item>
 `;
 
-const buildRoot = (config, metadata) => {
+const buildRoot = (config: Config, metadata: Metadata[]) => {
   const items = metadata.slice(0, config.rssItemCount).map(buildItem).join('\n');
 
   return `<?xml version="1.0" encoding="UTF-8" ?>
@@ -25,7 +27,7 @@ const buildRoot = (config, metadata) => {
 `;
 };
 
-export const buildRss = (config, metadata) => {
+export const buildRss = (config: Config, metadata: Metadata[]) => {
   const outputFilePath = path.join(config.buildPath, 'rss.xml');
   const content = buildRoot(config, metadata);
   fs.writeFileSync(outputFilePath, content);

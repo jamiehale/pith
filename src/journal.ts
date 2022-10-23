@@ -1,22 +1,24 @@
-import fs from 'node:fs';
-import path from 'node:path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import parseISO from 'date-fns/parseISO';
 import format from 'date-fns/format';
-import mustache from 'mustache';
+import * as mustache from 'mustache';
 import { allFilesInPath, loadSourceFile, mkdirp } from './util';
 import { renderMarkdown } from './markdown';
 import { renderTemplate } from './templates';
 import { buildRss } from './rss';
+import { Config } from './config';
+import { Metadata } from './metadata';
 
-const createOutputPath = (config, d) => `${config.buildPath}/${format(d, 'yyyy')}/${format(d, 'MM')}`;
+const createOutputPath = (config: Config, d: Date): string => `${config.buildPath}/${format(d, 'yyyy')}/${format(d, 'MM')}`;
 
-const createOutputFilename = (config, d) => `${createOutputPath(config, d)}/${format(d, 'yyyy-MM-dd')}.html`;
+const createOutputFilename = (config: Config, d: Date): string => `${createOutputPath(config, d)}/${format(d, 'yyyy-MM-dd')}.html`;
 
-const createInputFilename = (config, d) => `${config.journalPath}/${format(d, 'yyyy')}/${format(d, 'MM')}/${format(d, 'yyyy-MM-dd')}.md`;
+const createInputFilename = (config: Config, d: Date): string => `${config.journalPath}/${format(d, 'yyyy')}/${format(d, 'MM')}/${format(d, 'yyyy-MM-dd')}.md`;
 
-const journalHref = (d) => `/${format(d, 'yyyy')}/${format(d, 'MM')}/${format(d, 'yyyy-MM-dd')}.html`;
+const journalHref = (d: Date): string => `/${format(d, 'yyyy')}/${format(d, 'MM')}/${format(d, 'yyyy-MM-dd')}.html`;
 
-const buildOutput = (config, metadata, filename) => {
+const buildOutput = (config: Config, metadata: Omit<Metadata, 'title' | 'summary'>, filename: string | undefined = undefined): Metadata => {
   const inputFilePath = createInputFilename(config, metadata.today);
   const outputFilePath = filename || createOutputFilename(config, metadata.today);
   console.log(`${inputFilePath} -> ${outputFilePath}...`);
@@ -51,26 +53,22 @@ const buildOutput = (config, metadata, filename) => {
   };
 };
 
-const dateDescending = (a, b) => b.valueOf() - a.valueOf();
+const dateDescending = (a: Date, b: Date) => b.valueOf() - a.valueOf();
 
-const getDates = (config) =>
-  allFilesInPath(config.journalPath).reduce(
-    (dates, year) => [
-      ...dates,
-      ...allFilesInPath(path.join(config.journalPath, year)).reduce(
-        (dates, month) => [
-          ...dates,
-          ...allFilesInPath(path.join(config.journalPath, year, month)).reduce((dates, filename) => [...dates, parseISO(path.basename(filename, '.md'))], []),
-        ],
-        []
-      ),
-    ],
-    []
-  );
+const filenamesToDates = (filenames: string[]): Date[] =>
+  filenames.reduce<Date[]>((dates, filename) => [...dates, parseISO(path.basename(filename, '.md'))], []);
 
-const getSortedDates = (config) => getDates(config).sort(dateDescending);
+const monthsToDates = (config: Config, year: string, months: string[]): Date[] =>
+  months.reduce<Date[]>((dates, month) => [...dates, ...filenamesToDates(allFilesInPath(path.join(config.journalPath, year, month)))], []);
 
-const buildMetadata = (config, dates) => {
+const yearsToDates = (config: Config, years: string[]): Date[] =>
+  years.reduce<Date[]>((dates, year) => [...dates, ...monthsToDates(config, year, allFilesInPath(path.join(config.journalPath, year)))], []);
+
+const getDates = (config: Config): Date[] => yearsToDates(config, allFilesInPath(config.journalPath));
+
+const getSortedDates = (config: Config) => getDates(config).sort(dateDescending);
+
+const buildMetadata = (config: Config, dates: Date[]): Omit<Metadata, 'title' | 'summary'>[] => {
   const metadata = [];
   for (let i = 0; i < dates.length; i++) {
     if (i === 0) {
@@ -110,10 +108,10 @@ const buildMetadata = (config, dates) => {
   return metadata;
 };
 
-export const buildJournal = (config) => {
+export const buildJournal = (config: Config) => {
   const dates = getSortedDates(config);
-  let metadata = buildMetadata(config, dates);
-  metadata = metadata.map((record) => buildOutput(config, record));
+  const partialMetadata = buildMetadata(config, dates);
+  const metadata = partialMetadata.map((record) => buildOutput(config, record));
   if (metadata.length > 0) {
     buildOutput(config, metadata[0], path.join(config.buildPath, 'index.html'));
   }

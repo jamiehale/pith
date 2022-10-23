@@ -1,11 +1,12 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import mustache from 'mustache';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import * as mustache from 'mustache';
 import { allFilesInPath, loadSourceFile, mkdirp } from './util';
 import { renderMarkdown } from './markdown';
 import { renderTemplate } from './templates';
+import { Config } from './config';
 
-const buildHtmlPage = (config, filename) => {
+const buildHtmlPage = (config: Config, filename: string) => {
   const inputFilePath = path.join(config.pagesPath, filename);
   const outputFilePath = path.join(config.buildPath, filename);
   console.log(`${inputFilePath} -> ${outputFilePath}...`);
@@ -24,7 +25,7 @@ const buildHtmlPage = (config, filename) => {
   fs.writeFileSync(outputFilePath, rendered);
 };
 
-const buildMarkdownPage = (config, filename) => {
+const buildMarkdownPage = (config: Config, filename: string) => {
   const inputFilePath = path.join(config.pagesPath, filename);
   const outputFilename = `${path.basename(filename, '.md')}.html`;
   const outputFilePath = path.join(config.buildPath, outputFilename);
@@ -45,7 +46,7 @@ const buildMarkdownPage = (config, filename) => {
   fs.writeFileSync(outputFilePath, rendered);
 };
 
-export const buildPages = (config) => {
+export const buildPages = (config: Config) => {
   if (fs.existsSync(config.pagesPath)) {
     allFilesInPath(config.pagesPath).forEach((filename) => {
       if (path.extname(filename) === '.html') {
