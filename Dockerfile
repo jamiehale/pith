@@ -8,8 +8,8 @@ RUN yarn install --frozen-lockfile
 
 COPY . .
 
-RUN yarn 
+RUN yarn build
 
 ENV PITH_ROOT=/pith
 
-CMD [ "yarn", "build" ]
+CMD [ "yarn", "start" ]
