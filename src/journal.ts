@@ -1,119 +1,143 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import parseISO from 'date-fns/parseISO';
 import format from 'date-fns/format';
-import * as mustache from 'mustache';
+import formatISO from 'date-fns/formatISO';
 import { allFilesInPath, loadSourceFile, mkdirp } from './util';
 import { renderMarkdown } from './markdown';
 import { renderTemplate } from './templates';
 import { buildRss } from './rss';
 import { Config } from './config';
-import { Metadata } from './metadata';
+import { JournalEntry } from './journal-entry';
 
-const createOutputPath = (config: Config, d: Date): string => `${config.buildPath}/${format(d, 'yyyy')}/${format(d, 'MM')}`;
+const journalHref = (date: Date, title?: string): string => `/${format(date, 'yyyy')}/${format(date, 'MM')}/${buildOutputFilename(date, title)}`;
 
-const createOutputFilename = (config: Config, d: Date): string => `${createOutputPath(config, d)}/${format(d, 'yyyy-MM-dd')}.html`;
+const journalEntryHref = (entry: JournalEntry): string => journalHref(entry.date, entry.title);
 
-const createInputFilename = (config: Config, d: Date): string => `${config.journalPath}/${format(d, 'yyyy')}/${format(d, 'MM')}/${format(d, 'yyyy-MM-dd')}.md`;
+function loadFromFolder(config: Config, folderPath: string): JournalEntry[] {
+  return allFilesInPath(folderPath).reduce<JournalEntry[]>((entries, filename) => {
+    const filePath = path.join(folderPath, filename);
+    if (fs.statSync(filePath).isDirectory()) {
+      return [...entries, ...loadFromFolder(config, filePath)];
+    }
+    if (path.extname(filePath) === '.md') {
+      const { frontMatter, contents } = loadSourceFile(filePath);
+      const renderedMarkdown = renderMarkdown(contents);
+      if (frontMatter.date) {
+        return [
+          ...entries,
+          {
+            date: new Date(frontMatter.date),
+            title: frontMatter.title,
+            content: renderedMarkdown,
+            sourcePath: filePath,
+            frontMatter,
+            link: `${config.baseUrl}${journalHref(new Date(frontMatter.date), frontMatter.title)}`,
+          },
+        ];
+      }
+      throw new Error('No journal entry date found in front matter');
+    }
+    if (path.extname(filePath) === '.html') {
+      const { frontMatter, contents } = loadSourceFile(filePath);
+      if (frontMatter.date) {
+        return [
+          ...entries,
+          {
+            date: new Date(frontMatter.date),
+            title: frontMatter.title,
+            content: contents,
+            sourcePath: filePath,
+            frontMatter,
+            link: `${config.baseUrl}${journalHref(new Date(frontMatter.date), frontMatter.title)}`,
+          },
+        ];
+      }
+    }
+    return entries;
+  }, []);
+}
 
-const journalHref = (d: Date): string => `/${format(d, 'yyyy')}/${format(d, 'MM')}/${format(d, 'yyyy-MM-dd')}.html`;
+const loadAllEntries = (config: Config): JournalEntry[] => loadFromFolder(config, config.journalPath);
 
-const buildOutput = (config: Config, metadata: Omit<Metadata, 'title' | 'summary'>, filename: string | undefined = undefined): Metadata => {
-  const inputFilePath = createInputFilename(config, metadata.today);
-  const outputFilePath = filename || createOutputFilename(config, metadata.today);
-  console.log(`${inputFilePath} -> ${outputFilePath}...`);
-
-  const { frontMatter, contents } = loadSourceFile(inputFilePath);
-
-  const renderedMarkdown = renderMarkdown(contents);
-  let rendered = mustache.render(renderedMarkdown, frontMatter);
-  const summary = rendered
-    .replace(/(<([^>]+)>)/gi, '')
-    .substring(0, config.rssSummaryLength)
-    .concat('...');
-  if (frontMatter.layout) {
-    rendered = renderTemplate(config, frontMatter.layout, {
-      ...frontMatter,
-      content: rendered,
-      title: frontMatter.title || format(metadata.today, 'EEEE, MMMM do yyyy').toLowerCase(),
-      older: format(metadata.older, 'yyyy-MM-dd'),
-      olderHref: journalHref(metadata.older),
-      newer: format(metadata.newer, 'yyyy-MM-dd'),
-      newerHref: journalHref(metadata.newer),
-    });
+const buildOutputFilename = (date: Date, title?: string): string => {
+  const dateString = `${format(date, 'yyyy')}-${format(date, 'MM')}-${format(date, 'dd')}`;
+  if (title) {
+    const santizedTitle = title.split(' ').join('-');
+    return `${dateString}-${santizedTitle}.html`;
   }
-
-  mkdirp(path.dirname(outputFilePath));
-  fs.writeFileSync(outputFilePath, rendered);
-
-  return {
-    ...metadata,
-    title: frontMatter.title || format(metadata.today, 'EEEE, MMMM do yyyy').toLowerCase(),
-    summary: frontMatter.summary || summary,
-  };
+  return `${dateString}.html`;
 };
 
-const dateDescending = (a: Date, b: Date) => b.valueOf() - a.valueOf();
+const buildOutputFilePath = (config: Config, entry: JournalEntry): string =>
+  path.join(config.buildPath, format(entry.date, 'yyyy'), format(entry.date, 'MM'), buildOutputFilename(entry.date, entry.title));
 
-const filenamesToDates = (filenames: string[]): Date[] =>
-  filenames.reduce<Date[]>((dates, filename) => [...dates, parseISO(path.basename(filename, '.md'))], []);
+const entryDateDescending = (a: JournalEntry, b: JournalEntry) => b.date.valueOf() - a.date.valueOf();
 
-const monthsToDates = (config: Config, year: string, months: string[]): Date[] =>
-  months.reduce<Date[]>((dates, month) => [...dates, ...filenamesToDates(allFilesInPath(path.join(config.journalPath, year, month)))], []);
+interface NavMapEntry {
+  older?: string;
+  newer?: string;
+  link: string;
+}
 
-const yearsToDates = (config: Config, years: string[]): Date[] =>
-  years.reduce<Date[]>((dates, year) => [...dates, ...monthsToDates(config, year, allFilesInPath(path.join(config.journalPath, year)))], []);
+type NavMap = { [date: string]: NavMapEntry };
 
-const getDates = (config: Config): Date[] => yearsToDates(config, allFilesInPath(config.journalPath));
+const dateToNavMapKey = (date: Date): string => formatISO(date);
 
-const getSortedDates = (config: Config) => getDates(config).sort(dateDescending);
-
-const buildMetadata = (config: Config, dates: Date[]): Omit<Metadata, 'title' | 'summary'>[] => {
-  const metadata = [];
-  for (let i = 0; i < dates.length; i++) {
+const buildNavMap = (config: Config, entries: JournalEntry[]): NavMap => {
+  const navMap: NavMap = {};
+  for (let i = 0; i < entries.length; i++) {
+    const date = dateToNavMapKey(entries[i].date);
     if (i === 0) {
-      if (i === dates.length - 1) {
-        metadata.push({
-          today: dates[i],
-          older: dates[i],
-          newer: dates[i],
-          link: `${config.baseUrl}${journalHref(dates[i])}`,
-        });
+      if (i === entries.length - 1) {
+        navMap[date] = {
+          link: `${config.baseUrl}${journalEntryHref(entries[i])}`,
+        };
       } else {
-        metadata.push({
-          today: dates[i],
-          older: dates[i + 1],
-          newer: dates[i], // there is no yesterday
-          link: `${config.baseUrl}${journalHref(dates[i])}`,
-        });
+        navMap[date] = {
+          older: journalEntryHref(entries[i + 1]),
+          link: `${config.baseUrl}${journalEntryHref(entries[i])}`,
+        };
       }
     } else {
-      if (i === dates.length - 1) {
-        metadata.push({
-          today: dates[i],
-          older: dates[i], // there is no tomorrow
-          newer: dates[i - 1],
-          link: `${config.baseUrl}${journalHref(dates[i])}`,
-        });
+      if (i === entries.length - 1) {
+        navMap[date] = {
+          newer: journalEntryHref(entries[i - 1]),
+          link: `${config.baseUrl}${journalEntryHref(entries[i])}`,
+        };
       } else {
-        metadata.push({
-          today: dates[i],
-          older: dates[i + 1],
-          newer: dates[i - 1],
-          link: `${config.baseUrl}${journalHref(dates[i])}`,
-        });
+        navMap[date] = {
+          older: journalEntryHref(entries[i + 1]),
+          newer: journalEntryHref(entries[i - 1]),
+          link: `${config.baseUrl}${journalEntryHref(entries[i])}`,
+        };
       }
     }
   }
-  return metadata;
+  return navMap;
 };
 
 export const buildJournal = (config: Config) => {
-  const dates = getSortedDates(config);
-  const partialMetadata = buildMetadata(config, dates);
-  const metadata = partialMetadata.map((record) => buildOutput(config, record));
-  if (metadata.length > 0) {
-    buildOutput(config, metadata[0], path.join(config.buildPath, 'index.html'));
+  const allEntries = loadAllEntries(config).sort(entryDateDescending);
+  const navMap = buildNavMap(config, allEntries);
+  for (let i = 0; i < allEntries.length; i++) {
+    const entry = allEntries[i];
+    console.log(entry.date, entry.title);
+    const outputFilePath = buildOutputFilePath(config, entry);
+    let content = entry.content;
+    if (entry.frontMatter.layout) {
+      const date = dateToNavMapKey(entry.date);
+      content = renderTemplate(config, entry.frontMatter.layout, {
+        ...entry.frontMatter,
+        olderHref: navMap[date].older,
+        newerHref: navMap[date].newer,
+      });
+    }
+    mkdirp(path.dirname(outputFilePath));
+    fs.writeFileSync(outputFilePath, content);
+
+    if (i === 0) {
+      fs.writeFileSync(path.join(config.buildPath, 'index.html'), content);
+    }
   }
-  buildRss(config, metadata);
+  buildRss(config, allEntries);
 };
