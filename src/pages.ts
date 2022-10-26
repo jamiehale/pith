@@ -5,11 +5,12 @@ import { allFilesInPath, loadSourceFile, mkdirp } from './util';
 import { renderMarkdown } from './markdown';
 import { renderTemplate } from './templates';
 import { Config } from './config';
+import { logFileProcessed } from './log';
 
 const buildHtmlPage = (config: Config, filename: string) => {
   const inputFilePath = path.join(config.pagesPath, filename);
   const outputFilePath = path.join(config.buildPath, filename);
-  console.log(`${inputFilePath} -> ${outputFilePath}...`);
+  logFileProcessed(inputFilePath, outputFilePath);
 
   const { frontMatter, contents } = loadSourceFile(inputFilePath);
 
@@ -29,7 +30,7 @@ const buildMarkdownPage = (config: Config, filename: string) => {
   const inputFilePath = path.join(config.pagesPath, filename);
   const outputFilename = `${path.basename(filename, '.md')}.html`;
   const outputFilePath = path.join(config.buildPath, outputFilename);
-  console.log(`${inputFilePath} -> ${outputFilePath}...`);
+  logFileProcessed(inputFilePath, outputFilePath);
 
   const { frontMatter, contents } = loadSourceFile(inputFilePath);
 

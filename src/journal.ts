@@ -8,6 +8,7 @@ import { renderTemplate } from './templates';
 import { buildRss } from './rss';
 import { Config } from './config';
 import { JournalEntry } from './journal-entry';
+import { logFileProcessed } from './log';
 
 const journalHref = (date: Date, title?: string): string => `/${format(date, 'yyyy')}/${format(date, 'MM')}/${buildOutputFilename(date, title)}`;
 
@@ -123,7 +124,6 @@ export const buildJournal = (config: Config) => {
   const navMap = buildNavMap(config, allEntries);
   for (let i = 0; i < allEntries.length; i++) {
     const entry = allEntries[i];
-    console.log(entry.date, entry.title);
     const outputFilePath = buildOutputFilePath(config, entry);
     let content = entry.content;
     if (entry.frontMatter.layout) {
@@ -134,11 +134,14 @@ export const buildJournal = (config: Config) => {
         newerHref: navMap[date].newer,
       });
     }
+    logFileProcessed(entry.sourcePath, outputFilePath);
     mkdirp(path.dirname(outputFilePath));
     fs.writeFileSync(outputFilePath, content);
 
     if (i === 0) {
-      fs.writeFileSync(path.join(config.buildPath, 'index.html'), content);
+      const indexFilePath = path.join(config.buildPath, 'index.html');
+      logFileProcessed(entry.sourcePath, indexFilePath);
+      fs.writeFileSync(indexFilePath, content);
     }
   }
   buildRss(config, allEntries);

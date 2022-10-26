@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { Config } from './config';
 import { JournalEntry } from './journal-entry';
+import { logFileProcessed } from './log';
 
 const buildItem = (entry: JournalEntry) => `<item>
   <title>${entry.title}</title>
@@ -33,5 +34,6 @@ const buildRoot = (config: Config, allEntries: JournalEntry[]) => {
 export const buildRss = (config: Config, allEntries: JournalEntry[]) => {
   const outputFilePath = path.join(config.buildPath, 'rss.xml');
   const content = buildRoot(config, allEntries);
+  logFileProcessed('', outputFilePath);
   fs.writeFileSync(outputFilePath, content);
 };
