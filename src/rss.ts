@@ -1,3 +1,4 @@
+import formatISO from 'date-fns/formatISO';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { Config } from './config';
@@ -7,6 +8,8 @@ const buildItem = (entry: JournalEntry) => `<item>
   <title>${entry.title}</title>
   <link>${entry.link}</link>
   <description>${entry.content}</description>
+  <pubDate>${formatISO(entry.date)}</pubDate>
+  <guid>${entry.guid}</guid>
 </item>
 `;
 

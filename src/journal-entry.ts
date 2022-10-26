@@ -5,4 +5,5 @@ export interface JournalEntry {
   sourcePath: string;
   frontMatter: Record<string, any>;
   link: string;
+  guid: string;
 }

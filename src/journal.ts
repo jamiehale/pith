@@ -32,6 +32,7 @@ function loadFromFolder(config: Config, folderPath: string): JournalEntry[] {
             sourcePath: filePath,
             frontMatter,
             link: `${config.baseUrl}${journalHref(new Date(frontMatter.date), frontMatter.title)}`,
+            guid: frontMatter.guid || `${config.baseUrl}${journalHref(new Date(frontMatter.date), frontMatter.title)}`,
           },
         ];
       }
@@ -49,6 +50,7 @@ function loadFromFolder(config: Config, folderPath: string): JournalEntry[] {
             sourcePath: filePath,
             frontMatter,
             link: `${config.baseUrl}${journalHref(new Date(frontMatter.date), frontMatter.title)}`,
+            guid: frontMatter.guid || `${config.baseUrl}${journalHref(new Date(frontMatter.date), frontMatter.title)}`,
           },
         ];
       }
