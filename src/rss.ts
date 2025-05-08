@@ -1,4 +1,4 @@
-import formatISO from 'date-fns/formatISO';
+import { formatISO } from 'date-fns';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { Config } from './config';

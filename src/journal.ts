@@ -1,7 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import format from 'date-fns/format';
-import formatISO from 'date-fns/formatISO';
+import { format, formatISO } from 'date-fns';
 import { allFilesInPath, loadSourceFile, mkdirp } from './util';
 import { renderMarkdown } from './markdown';
 import { renderTemplate } from './templates';
@@ -14,6 +13,39 @@ const journalHref = (date: Date, title?: string): string => `/${format(date, 'yy
 
 const journalEntryHref = (entry: JournalEntry): string => journalHref(entry.date, entry.title);
 
+const renderMarkdownHere = (config: Config, filePath: string): JournalEntry => {
+  const { frontMatter, contents } = loadSourceFile(filePath);
+  const renderedMarkdown = renderMarkdown(contents);
+  if (frontMatter.date) {
+    return {
+      date: new Date(frontMatter.date),
+      title: frontMatter.title,
+      content: renderedMarkdown,
+      sourcePath: filePath,
+      frontMatter,
+      link: `${config.baseUrl}${journalHref(new Date(frontMatter.date), frontMatter.title)}`,
+      guid: frontMatter.guid || `${config.baseUrl}${journalHref(new Date(frontMatter.date), frontMatter.title)}`,
+    };
+  }
+  throw new Error('No journal entry date found in front matter');
+};
+
+const renderHtmlHere = (config: Config, filePath: string): JournalEntry => {
+  const { frontMatter, contents } = loadSourceFile(filePath);
+  if (frontMatter.date) {
+    return {
+      date: new Date(frontMatter.date),
+      title: frontMatter.title,
+      content: contents,
+      sourcePath: filePath,
+      frontMatter,
+      link: `${config.baseUrl}${journalHref(new Date(frontMatter.date), frontMatter.title)}`,
+      guid: frontMatter.guid || `${config.baseUrl}${journalHref(new Date(frontMatter.date), frontMatter.title)}`,
+    };
+  }
+  throw new Error('No journal entry date found in front matter');
+};
+
 function loadFromFolder(config: Config, folderPath: string): JournalEntry[] {
   return allFilesInPath(folderPath).reduce<JournalEntry[]>((entries, filename) => {
     const filePath = path.join(folderPath, filename);
@@ -21,40 +53,16 @@ function loadFromFolder(config: Config, folderPath: string): JournalEntry[] {
       return [...entries, ...loadFromFolder(config, filePath)];
     }
     if (path.extname(filePath) === '.md') {
-      const { frontMatter, contents } = loadSourceFile(filePath);
-      const renderedMarkdown = renderMarkdown(contents);
-      if (frontMatter.date) {
-        return [
-          ...entries,
-          {
-            date: new Date(frontMatter.date),
-            title: frontMatter.title,
-            content: renderedMarkdown,
-            sourcePath: filePath,
-            frontMatter,
-            link: `${config.baseUrl}${journalHref(new Date(frontMatter.date), frontMatter.title)}`,
-            guid: frontMatter.guid || `${config.baseUrl}${journalHref(new Date(frontMatter.date), frontMatter.title)}`,
-          },
-        ];
-      }
-      throw new Error('No journal entry date found in front matter');
+      return [
+        ...entries,
+        renderMarkdownHere(config, filePath),
+      ];
     }
     if (path.extname(filePath) === '.html') {
-      const { frontMatter, contents } = loadSourceFile(filePath);
-      if (frontMatter.date) {
-        return [
-          ...entries,
-          {
-            date: new Date(frontMatter.date),
-            title: frontMatter.title,
-            content: contents,
-            sourcePath: filePath,
-            frontMatter,
-            link: `${config.baseUrl}${journalHref(new Date(frontMatter.date), frontMatter.title)}`,
-            guid: frontMatter.guid || `${config.baseUrl}${journalHref(new Date(frontMatter.date), frontMatter.title)}`,
-          },
-        ];
-      }
+      return [
+        ...entries,
+        renderHtmlHere(config, filePath),
+      ];
     }
     return entries;
   }, []);

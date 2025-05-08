@@ -1,3 +1,3 @@
 import { marked } from 'marked';
 
-export const renderMarkdown = (s: string) => marked.parse(s);
+export const renderMarkdown = (s: string): string => marked.parse(s, { async: false });
