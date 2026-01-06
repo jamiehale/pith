@@ -5,8 +5,9 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { buildJournal } from './journal';
 import { buildPages } from './pages';
-import { mkdirp } from './util';
+import { allFilesInPath, loadSourceFile, loadSourceFilesRecursively, mkdirp } from './util';
 import { Config } from './config';
+import { LoadedFile, Post } from './types';
 
 const cleanBuild = (config: Config): void => {
   fs.rmSync(config.buildPath, { recursive: true, force: true });
@@ -24,8 +25,28 @@ const resetBuildFolder = (config: Config): void => {
   mkdirp(config.buildPath);
 };
 
+interface AllFiles {
+  allPosts: Post[];
+  postsById: Record<string, Post>;
+}
+
+const loadAllPosts = (config: Config) => {
+  allFilesInPath(config.journalPath).forEach((filename) => {
+    const { frontMatter, contents } = loadSourceFile(filename);
+  });
+};
+
+const loadAllFiles = (config: Config): LoadedFile[] => {
+  return loadSourceFilesRecursively(config.sourcePath);
+};
+
 const buildSite = (config: Config): void => {
   resetBuildFolder(config);
+  const allFiles = loadAllFiles(config);
+  const db = {
+    allFiles,
+    postsById: allFiles.reduce<Record<string, LoadedFile>>((acc, file) => (file.frontMatter.id ? { ...acc, [file.frontMatter.id]: file } : acc), {})
+  }
   buildJournal(config);
   buildPages(config);
   copyStatic(config);
@@ -33,6 +54,7 @@ const buildSite = (config: Config): void => {
 
 const pithRoot = process.env.PITH_ROOT || '.';
 const config: Config = {
+  sourcePath: pithRoot,
   journalPath: path.join(pithRoot, 'journal'),
   templatesPath: path.join(pithRoot, 'templates'),
   staticPath: path.join(pithRoot, 'static'),

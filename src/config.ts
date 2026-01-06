@@ -1,4 +1,5 @@
 export interface Config {
+  sourcePath: string;
   journalPath: string;
   templatesPath: string;
   staticPath: string;
